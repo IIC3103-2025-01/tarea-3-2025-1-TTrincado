@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './App.css';
+import { scrapeWikipedia } from './utils/scraper';
 
 const isValidWikipediaUrl = (url) => {
   try {
@@ -17,11 +18,13 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [showWarning, setShowWarning] = useState(false);
 
-  const handleUrlSubmit = (e) => {
+  const handleUrlSubmit = async (e) => {
     if (e.key === 'Enter') {
-      if (isValidWikipediaUrl(urlInput)) {
+      if (isValidWikipediaUrl(urlInput)) { 
         setIsUrlAccepted(true);
         setShowWarning(false);
+
+        const scrapedText = await scrapeWikipedia(urlInput);
       } else {
         setShowWarning(true);
       }
