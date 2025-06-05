@@ -46,6 +46,8 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [showWarning, setShowWarning] = useState(false);
   const [articleEmbeddings, setArticleEmbeddings] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
 
   const handleUrlSubmit = async (e) => {
     if (e.key === 'Enter') {
@@ -70,6 +72,8 @@ function App() {
     if (e.key === 'Enter' && queryInput.trim() !== '') {
       const userMessage = { role: 'user', text: queryInput };
       setMessages((prev) => [...prev, userMessage]);
+      setIsLoading(true);
+
 
       const queryEmbedding = await getEmbedding(queryInput);
       if (!queryEmbedding) {
@@ -85,6 +89,7 @@ function App() {
 
       const aiResponse = await askLLM("Biard es un apellido. Algunas personas notables tienen ese apellido. No se refiere a una comida, objeto o concepto abstracto, sino a un nombre de familia.", "Que es biard? Es un apellido o una comida?");
       console.log("AI Response:", aiResponse)
+      setIsLoading(false);
 
       const aiMessage = { role: 'ai', text: aiResponse };
 
@@ -140,6 +145,11 @@ function App() {
                   </div>
                 ))}
               </div>
+              {isLoading && (
+                <div className="loading-spinner">
+                  <div className="dot-flashing"></div>
+                </div>
+              )}
             </div>
           )}
         </div>
