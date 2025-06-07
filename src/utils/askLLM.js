@@ -1,21 +1,31 @@
 export async function askLLM(context, question) {
   const apiUrl = 'https://asteroide.ing.uc.cl/v1/chat/completions';
 
-  const prompt = `Responde a la siguiente pregunta ayudandote con el contexto proporcionado. No es necesario que lo tomes muy literal ni que te rigas solo por el. 
-    Puedes hacer inferencias simples si el contexto lo permite.
-    Si no hay suficiente información en el contexto, pide que se reformule la pregunta para entenderla mejor.
+    const prompt = `Tu ROL es de responder preguntas basandote en tus conocimientos y ayudandote con el contexto que se te proporciona.
 
-    Responde siempre en español claro y conciso.
+    Estas preguntas provienen de un usuario que esta interactuando con un ChatBOT (Tu).
 
-    Contexto:
+    Responde en español claro y conciso la siguiente pregunta. 
+
+    Debes usar el texto base que está en ingles (tu mismo debes traducirlo y comprenderlo) como ayuda para tu respuesta. 
+
+    Haz inferencias simples si el contenido lo permite.
+
+    Si no hay suficiente información, o el texto base está vacío, pide una reformulación o menciona que no tienes datos suficientes.
+
+    IMPORTANTE: [Este proceso debe ser transparente para el usuario que realiza las consultas.
+    NO PUEDES mencionar nada fuera de la respuesta que vayas a generar.
+    Debes priorizar responder lo que sea que pregunte el usuario, que estará bajo Pregunta del usuario
+    NO PARTAS RESPONDIENDO LA PREGUNTA CON la respuesta es: o la respuesta es la siguiente:. Solo responde al usuario derechamente.]
+
+    Texto base:
     ${context}
 
-    Pregunta: ${question}
-    Respuesta:`;
+    Pregunta del usuario:
+    ${question}`;
 
 
   console.log("Procesando con prompt:", prompt)
-  console.log("Procesando con context:", context)
 
   try {
     const response = await fetch(apiUrl, {

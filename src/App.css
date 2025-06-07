@@ -51,6 +51,10 @@
   border-color: #3fc1c9;
 }
 
+.input::placeholder {
+  text-align: center;
+}
+
 .warning {
   color: #ff6b6b;
   background-color: #2e1b1b;
@@ -132,4 +136,17 @@
   0% { opacity: 1; }
   50% { opacity: 0.2; }
   100% { opacity: 1; }
+}
+
+.footer-warning {
+  margin-top: 20px;
+  padding: 12px 24px;
+  text-align: center;
+  color: #f1c40f;
+  background-color: #102841;
+  font-size: 0.9rem;
+  border-top: 1px solid #3fc1c9;
+  width: 100%;
+  max-width: 900px;
+  border-radius: 0 0 12px 12px;
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRef, useEffect } from 'react';
 
 import './App.css';
 
@@ -7,28 +8,7 @@ import { getEmbeddingsFromChunks } from './utils/embedding';
 import { getEmbedding } from './utils/embedding';
 import { splitTextIntoChunks } from './utils/langChainSplitter';
 import { askLLM } from './utils/askLLM';
-
-function cosineSimilarity(vecA, vecB) {
-  const dot = vecA.reduce((sum, val, i) => sum + val * vecB[i], 0);
-  const normA = Math.sqrt(vecA.reduce((sum, val) => sum + val * val, 0));
-  const normB = Math.sqrt(vecB.reduce((sum, val) => sum + val * val, 0));
-  return dot / (normA * normB);
-}
-
-function getTopKChunks(embeddings, queryEmbedding, k = 3, threshold = 0.2) {
-  const scoredChunks = embeddings
-    .map(({ text, embedding }) => ({
-      text,
-      score: cosineSimilarity(embedding, queryEmbedding),
-    }));
-
-  console.log("Similitudes:", scoredChunks);
-
-  return scoredChunks
-    .filter(({ score }) => score >= threshold)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, k);
-}
+import { initCollection, saveEmbeddings, searchSimilarChunks } from './utils/Qdrant';
 
 const isValidWikipediaUrl = (url) => {
   try {
@@ -46,21 +26,40 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [showWarning, setShowWarning] = useState(false);
   const [articleEmbeddings, setArticleEmbeddings] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingArticle, setIsLoadingArticle] = useState(false);
+  const [isLoadingQuery, setIsLoadingQuery] = useState(false);
+  const messagesEndRef = useRef(null);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleUrlSubmit = async (e) => {
     if (e.key === 'Enter') {
-      if (isValidWikipediaUrl("https://en.wikipedia.org/wiki/Biard_(surname)")) { //urlInput
+      if (isValidWikipediaUrl(urlInput)) {
         setIsUrlAccepted(true);
         setShowWarning(false);
+        setIsLoadingArticle(true); 
 
-        const scrapedText = await scrapeWikipedia("https://en.wikipedia.org/wiki/Biard_(surname)");
-        const chunks = await splitTextIntoChunks(scrapedText)
-        const embeddings = await getEmbeddingsFromChunks(chunks)
-        
-        setArticleEmbeddings(embeddings);
-        console.log("Embeddings de articulo listos:", embeddings);
+        try {
+          const scrapedText = await scrapeWikipedia(urlInput);
+          console.log("Texto scrapeado: ", scrapedText)
+          
+          const chunks = await splitTextIntoChunks(scrapedText);
+          console.log("Chunks a aplicar embedding: ", chunks)
+
+          const articleEmbeddings = await getEmbeddingsFromChunks(chunks);
+          console.log("Embeddings del artículo: ", articleEmbeddings)
+          setArticleEmbeddings(articleEmbeddings);
+
+          await initCollection();
+          await saveEmbeddings(articleEmbeddings);
+
+        } catch (error) {
+          console.error("Error generando embeddings:", error);
+        } finally {
+          setIsLoadingArticle(false); 
+        }
 
       } else {
         setShowWarning(true);
@@ -72,27 +71,30 @@ function App() {
     if (e.key === 'Enter' && queryInput.trim() !== '') {
       const userMessage = { role: 'user', text: queryInput };
       setMessages((prev) => [...prev, userMessage]);
-      setIsLoading(true);
-
+      setIsLoadingQuery(true);
 
       const queryEmbedding = await getEmbedding(queryInput);
+
       if (!queryEmbedding) {
         const errorMsg = { role: 'ai', text: 'Error generando el embedding de la consulta.' };
         setMessages((prev) => [...prev, errorMsg]);
         return;
       }
 
-      const topChunks = getTopKChunks(articleEmbeddings, queryEmbedding[0], 3);
+      console.log("queryEmbedding ", queryEmbedding)
+      console.log("queryEmbedding[0] ", queryEmbedding[0])
+
+      const topChunks = await searchSimilarChunks(queryEmbedding[0], 5);
       console.log("topChunks: ",topChunks)
       
       const context = topChunks.map(c => c.text).join('\n\n');
 
-      const aiResponse = await askLLM("Biard es un apellido. Algunas personas notables tienen ese apellido. No se refiere a una comida, objeto o concepto abstracto, sino a un nombre de familia.", "Que es biard? Es un apellido o una comida?");
+      const aiResponse = await askLLM(context, queryInput);
       console.log("AI Response:", aiResponse)
-      setIsLoading(false);
+      
+      setIsLoadingQuery(false);
 
       const aiMessage = { role: 'ai', text: aiResponse };
-
       setMessages((prev) => [...prev, aiMessage]);
       setQueryInput('');
     }
@@ -127,33 +129,49 @@ function App() {
         <div className={`fade-section ${isUrlAccepted ? 'fade-in' : 'fade-out'}`}>
           {isUrlAccepted && (
             <div className="query-section">
-              <input
-                type="text"
-                placeholder="Escribe tu consulta y presiona Enter"
-                value={queryInput}
-                onChange={(e) => setQueryInput(e.target.value)}
-                onKeyDown={handleQuerySubmit}
-                className="input"
-              />
-              <div className="messages">
-                {messages.map((msg, index) => (
-                  <div
-                    key={index}
-                    className={`message ${msg.role === 'user' ? 'user' : 'ai'}`}
-                  >
-                    <strong>{msg.role === 'user' ? 'Tú' : 'IA'}:</strong> {msg.text}
-                  </div>
-                ))}
-              </div>
-              {isLoading && (
+              {isLoadingArticle ? (
                 <div className="loading-spinner">
                   <div className="dot-flashing"></div>
                 </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Escribe tu consulta y presiona Enter"
+                    value={queryInput}
+                    onChange={(e) => setQueryInput(e.target.value)}
+                    onKeyDown={handleQuerySubmit}
+                    className="input"
+                    disabled={isLoadingQuery}
+                    style={{ opacity: isLoadingQuery ? 0.5 : 1 }}
+                  />
+                  {isLoadingQuery && (
+                    <div className="loading-spinner">
+                      <div className="dot-flashing"></div>
+                    </div>
+                  )}
+                  <div className="messages">
+                    {messages.map((msg, index) => (
+                      <div
+                        key={index}
+                        className={`message ${msg.role === 'user' ? 'user' : 'ai'}`}
+                      >
+                        <strong>{msg.role === 'user' ? 'Tú' : 'IA'}:</strong> {msg.text}
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </>
               )}
             </div>
           )}
         </div>
       </main>
+
+      <footer className="footer-warning">
+        Warning: Dependiendo del largo del artículo y de la pregunta, la IA puede demorar en responder. Paciencia.
+        Puedes ver el estado de tu consulta en la consola.
+      </footer>
     </div>
   );
 }
